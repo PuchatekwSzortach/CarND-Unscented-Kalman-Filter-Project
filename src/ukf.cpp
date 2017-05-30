@@ -95,35 +95,35 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
 
   }
 
-//  if(meas_package.sensor_type_ == MeasurementPackage::LASER) {
-//
-//    if(!this->use_laser_)
-//    {
-//      return ;
-//    } else
-//    {
-//      // Predict new state with knowledge from previous measurement
-//      double time_delta = (meas_package.timestamp_ - this->time_us_) / 1000000.0;
-//      this->time_us_ = meas_package.timestamp_;
-//
-//      this->Prediction(time_delta);
-//      this->UpdateLidar(meas_package);
-//    }
-//
-//  } else
-//  {
-//    if(!this->use_radar_)
-//    {
-//      return ;
-//    }
-//    else
-//    {
-//
-//      std::cout << "Radar measurement came in" << std::endl ;
-//
-//    }
-//
-//  }
+  if(meas_package.sensor_type_ == MeasurementPackage::LASER) {
+
+    if(!this->use_laser_)
+    {
+      return ;
+    } else
+    {
+      // Predict new state with knowledge from previous measurement
+      double time_delta = (meas_package.timestamp_ - this->time_us_) / 1000000.0;
+      this->time_us_ = meas_package.timestamp_;
+
+      this->Prediction(time_delta);
+      this->UpdateLidar(meas_package);
+    }
+
+  } else
+  {
+    if(!this->use_radar_)
+    {
+      return ;
+    }
+    else
+    {
+
+      std::cout << "Radar measurement came in" << std::endl ;
+
+    }
+
+  }
 
 
 }
@@ -349,7 +349,7 @@ MatrixXd UKF::getSigmaPointsPredictions(MatrixXd augmented_sigma_points, double 
     noise_vector(3) = half_squared_time_delta * random_yaw_acceleration ;
     noise_vector(4) = time_delta * random_yaw_acceleration ;
 
-    predictions.col(index) = current_state + transition_vector + noise_vector ;
+    predictions.col(index) = current_state.head(5) + transition_vector + noise_vector ;
 
   }
 
