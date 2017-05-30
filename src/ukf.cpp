@@ -1,6 +1,7 @@
 #include "ukf.h"
 #include "Eigen/Dense"
 #include <iostream>
+#include "Tools.h"
 
 using namespace std;
 using Eigen::MatrixXd;
@@ -66,6 +67,8 @@ UKF::UKF() {
   // Per lecture notes recommendations
   this->lambda_ = 3 - this->n_x_ ;
 
+  this->weights_ = this->getSigmaPointsWeights() ;
+
   this->use_laser_ = true ;
 
   std::cout << "NOT USING RADAR FOR NOW!" << std::endl ;
@@ -110,8 +113,16 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
     float time_delta = (meas_package.timestamp_ - this->time_us_) / 1000000.0 ;
     this->time_us_ = meas_package.timestamp_ ;
 
-    MatrixXd predictions_matrix = this->getSigmaPointsPredictions(augmented_sigma_points_matrix, time_delta) ;
-    std::cout << "Predictions matrix is:\n" << predictions_matrix << std::endl ;
+    MatrixXd sigma_points_predictions_matrix =
+      this->getSigmaPointsPredictions(augmented_sigma_points_matrix, time_delta) ;
+
+//    std::cout << "About to calculace new mean and covariance" << std::endl ;
+    this->x_ = this->getMeanPrediction(sigma_points_predictions_matrix) ;
+//    std::cout << "New mean:\n" << this->x_ << std::endl ;
+    this->P_ = this->getPredictionCovarianceMatrix(sigma_points_predictions_matrix, this->x_) ;
+//    std::cout << "New covariance:\n" << this->P_ << std::endl ;
+
+
 
   } else
   {
@@ -304,4 +315,49 @@ MatrixXd UKF::getSigmaPointsPredictions(MatrixXd augmented_sigma_points_matrix, 
   }
 
   return predictionsMatrix ;
+}
+
+VectorXd UKF::getSigmaPointsWeights()
+{
+  VectorXd weights = VectorXd(2 * this->n_aug_ + 1);
+
+  weights(0) = this->lambda_ / (this->lambda_ + this->n_aug_) ;
+
+  for(int index = 1 ; index < 2 * this->n_aug_ + 1 ; ++index)
+  {
+    weights(index) = 0.5 / (this->lambda_ + this->n_aug_) ;
+  }
+
+  return weights ;
+}
+
+VectorXd UKF::getMeanPrediction(MatrixXd sigma_points_predictions_matrix)
+{
+  VectorXd mean_prediction = VectorXd(this->n_x_);
+  mean_prediction.fill(0);
+
+  for(int index = 0 ; index <  2 * this->n_aug_ + 1 ; ++index)
+  {
+    mean_prediction += this->weights_(index) * sigma_points_predictions_matrix.col(index) ;
+  }
+
+  return mean_prediction ;
+}
+
+MatrixXd UKF::getPredictionCovarianceMatrix(MatrixXd sigma_points_predictions_matrix, VectorXd mean_prediction)
+{
+  MatrixXd covariance_matrix = MatrixXd(this->n_x_, this->n_x_);
+  covariance_matrix.fill(0) ;
+
+  for(int index = 0 ; index < 2 * this->n_aug_ + 1 ; ++index)
+  {
+    VectorXd difference = sigma_points_predictions_matrix.col(index) - mean_prediction ;
+
+    // Normalize yaw angle to <-PI, PI> interval
+    difference(3) = Tools().getNormalizedAngle(difference(3)) ;
+
+    covariance_matrix += this->weights_(index) * difference * difference.transpose() ;
+  }
+
+  return covariance_matrix ;
 }

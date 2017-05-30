@@ -111,6 +111,11 @@ private:
     MatrixXd getAugmentedSigmaPointsMatrix(MatrixXd sigma_points_matrix) ;
     MatrixXd getSigmaPointsPredictions(MatrixXd augmented_sigma_points_matrix, double time_delta) ;
 
+    VectorXd getSigmaPointsWeights() ;
+    VectorXd getMeanPrediction(MatrixXd sigma_points_predictions_matrix) ;
+    MatrixXd getPredictionCovarianceMatrix(MatrixXd sigma_points_predictions_matrix, VectorXd mean_prediction) ;
+
+
 };
 
 #endif /* UKF_H */
