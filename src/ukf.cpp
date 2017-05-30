@@ -53,10 +53,6 @@ UKF::UKF() {
   Hint: one or more values initialized above might be wildly off...
   */
 
-  // Initialized weights matrix to some vector.
-  // Exact dimension will depend on type of sensor we are using at given update
-  this->weights_ = VectorXd(15) ;
-
   // We will use a CTRV model and will be predicting 5 variables:
   // x and y positions, longitudinal speed, yaw and yaw rate
   this->n_x_ = 5 ;
@@ -68,6 +64,7 @@ UKF::UKF() {
   this->lambda_ = 3 - this->n_x_ ;
 
   this->weights_ = this->getSigmaPointsWeights() ;
+  this->Xsig_pred_ = MatrixXd(this->n_x_, 2 * this->n_aug_ + 1) ;
 
   this->use_laser_ = true ;
 
@@ -98,10 +95,6 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
 
   }
 
-  //create sigma point matrix
-  MatrixXd sigma_points_matrix = this->getSigmaPointsMatrix();
-  MatrixXd augmented_sigma_points_matrix = this->getAugmentedSigmaPointsMatrix(sigma_points_matrix) ;
-
   if(meas_package.sensor_type_ == MeasurementPackage::LASER) {
 
     if(!this->use_laser_)
@@ -110,18 +103,10 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
     }
 
     // Predict new state with knowledge from previous measurement
-    float time_delta = (meas_package.timestamp_ - this->time_us_) / 1000000.0 ;
+    double time_delta = (meas_package.timestamp_ - this->time_us_) / 1000000.0 ;
     this->time_us_ = meas_package.timestamp_ ;
 
-    MatrixXd sigma_points_predictions_matrix =
-      this->getSigmaPointsPredictions(augmented_sigma_points_matrix, time_delta) ;
-
-//    std::cout << "About to calculace new mean and covariance" << std::endl ;
-    this->x_ = this->getMeanPrediction(sigma_points_predictions_matrix) ;
-//    std::cout << "New mean:\n" << this->x_ << std::endl ;
-    this->P_ = this->getPredictionCovarianceMatrix(sigma_points_predictions_matrix, this->x_) ;
-//    std::cout << "New covariance:\n" << this->P_ << std::endl ;
-
+    this->Prediction(time_delta) ;
 
 
   } else
@@ -151,6 +136,16 @@ void UKF::Prediction(double delta_t) {
   Complete this function! Estimate the object's location. Modify the state
   vector, x_. Predict sigma points, the state, and the state covariance matrix.
   */
+
+  //create sigma point matrix
+  MatrixXd sigma_points_matrix = this->getSigmaPointsMatrix();
+  MatrixXd augmented_sigma_points_matrix = this->getAugmentedSigmaPointsMatrix(sigma_points_matrix) ;
+
+  // Create sigma predictions, compute mean predictions and prediction covariance matrix
+  this->Xsig_pred_ = this->getSigmaPointsPredictions(augmented_sigma_points_matrix, delta_t) ;
+  this->x_ = this->getMeanPrediction(this->Xsig_pred_) ;
+  this->P_ = this->getPredictionCovarianceMatrix(this->Xsig_pred_, this->x_) ;
+
 }
 
 /**
