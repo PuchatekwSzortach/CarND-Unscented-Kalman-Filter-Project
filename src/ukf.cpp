@@ -118,7 +118,6 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
 
     std::cout << "Radar measurement came in" << std::endl ;
 
-
   }
 
 
@@ -144,7 +143,14 @@ void UKF::Prediction(double delta_t) {
   // Create sigma predictions, compute mean predictions and prediction covariance matrix
   this->Xsig_pred_ = this->getSigmaPointsPredictions(augmented_sigma_points, delta_t) ;
   this->x_ = this->getMeanPrediction(this->Xsig_pred_, this->n_x_) ;
+
+  // Normalize yaw angle
+  this->x_(3) = Tools().getNormalizedAngle(this->x_(3)) ;
+
   this->P_ = this->getPredictionCovarianceMatrix(this->Xsig_pred_, this->x_) ;
+
+  std::cout << "Prediction step" << std::endl ;
+  std::cout << "After prediction x is \n" << this->x_ << "\nand P is \n" << this->P_ << std::endl ;
 
 }
 
@@ -170,11 +176,28 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
   MatrixXd laser_measurements_predictions = this->getLaserMeasurementsPredictions(this->Xsig_pred_) ;
   VectorXd mean_measurement_prediction = this->getMeanPrediction(laser_measurements_predictions, n_z) ;
 
-  MatrixXd laser_measurement_prediction_covariane_matrix = this->getLaserMeasurementPredictionCovarianceMatrix(
+  MatrixXd laser_measurement_prediction_covariance_matrix = this->getLaserMeasurementPredictionCovarianceMatrix(
     laser_measurements_predictions, mean_measurement_prediction) ;
 
   MatrixXd cross_correlation_matrix = this->getLaserCrossCorrelationMatrix(
     laser_measurements_predictions, mean_measurement_prediction, n_z) ;
+
+  MatrixXd K = cross_correlation_matrix * laser_measurement_prediction_covariance_matrix.inverse() ;
+
+  VectorXd measurement(2) ;
+  measurement(0) = meas_package.raw_measurements_(0) ;
+  measurement(1) = meas_package.raw_measurements_(1) ;
+
+  VectorXd measurement_difference = measurement - mean_measurement_prediction ;
+
+  // Update
+  this->x_ = this->x_ + (K * measurement_difference) ;
+  this->P_ = this->P_ - (K * laser_measurement_prediction_covariance_matrix * K.transpose()) ;
+
+  // Normalize yaw angle
+  this->x_(3) = Tools().getNormalizedAngle(this->x_(3)) ;
+
+  std::cout << "After update x is \n" << this->x_ << "\nand P is \n" << this->P_ << std::endl ;
 
 }
 
