@@ -181,13 +181,13 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
   MatrixXd laser_measurements_predictions = this->getLaserMeasurementsPredictions(this->Xsig_pred_) ;
   VectorXd mean_measurement_prediction = this->getMeanPrediction(laser_measurements_predictions, n_z) ;
 
-  MatrixXd laser_measurement_prediction_covariance_matrix = this->getLaserMeasurementPredictionCovarianceMatrix(
+  MatrixXd S = this->getLaserMeasurementPredictionCovarianceMatrix(
     laser_measurements_predictions, mean_measurement_prediction) ;
 
-  MatrixXd cross_correlation_matrix = this->getLaserCrossCorrelationMatrix(
+  MatrixXd T = this->getLaserCrossCorrelationMatrix(
     laser_measurements_predictions, mean_measurement_prediction, n_z) ;
 
-  MatrixXd K = cross_correlation_matrix * laser_measurement_prediction_covariance_matrix.inverse() ;
+  MatrixXd K = T * S.inverse() ;
 
   VectorXd measurement(2) ;
   measurement(0) = meas_package.raw_measurements_(0) ;
@@ -197,7 +197,7 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
 
   // Update
   this->x_ = this->x_ + (K * measurement_difference) ;
-  this->P_ = this->P_ - (K * laser_measurement_prediction_covariance_matrix * K.transpose()) ;
+  this->P_ = this->P_ - (K * S * K.transpose()) ;
 
   // Normalize yaw angle
   this->x_(3) = Tools().getNormalizedAngle(this->x_(3)) ;
@@ -333,7 +333,7 @@ MatrixXd UKF::getSigmaPointsPredictions(MatrixXd augmented_sigma_points, double 
     else
     {
       transition_vector(0) = speed_ratios * (std::sin(interpolated_yaw) - std::sin(yaw));
-      transition_vector(1) = speed_ratios * (-std::cos(interpolated_yaw) + std::cos(yaw));
+      transition_vector(1) = speed_ratios * (std::cos(yaw) - std::cos(interpolated_yaw));
     }
 
     transition_vector(2) = 0 ;
@@ -407,9 +407,8 @@ MatrixXd UKF::getLaserMeasurementsPredictions(MatrixXd sigma_points_predictions)
 
   for(int index = 0 ; index < 2 * this->n_aug_ + 1 ; ++index)
   {
-    // For laser measurements we just copy prediction px and py
-    laser_measurements_predictions(0, index) = sigma_points_predictions(0, index) ;
-    laser_measurements_predictions(1, index) = sigma_points_predictions(1, index) ;
+    // To map predictions to laser measurements space we just copy predictions px and py
+    laser_measurements_predictions.col(index) = sigma_points_predictions.col(index).head(2) ;
   }
 
   return laser_measurements_predictions ;
@@ -419,14 +418,14 @@ MatrixXd UKF::getLaserMeasurementsPredictions(MatrixXd sigma_points_predictions)
 MatrixXd UKF::getLaserMeasurementPredictionCovarianceMatrix(
   MatrixXd laser_measurements_predictions, VectorXd mean_measurement_prediction)
 {
-
-  MatrixXd covariane_matrix = MatrixXd(2, 2);
+  MatrixXd covariance_matrix = MatrixXd(2, 2);
+  covariance_matrix.fill(0) ;
 
   for(int index = 0 ; index < 2 * this->n_aug_ + 1 ; ++index)
   {
     VectorXd difference = laser_measurements_predictions.col(index) - mean_measurement_prediction ;
 
-    covariane_matrix += this->weights_(index) * difference * difference.transpose() ;
+    covariance_matrix += this->weights_(index) * difference * difference.transpose() ;
   }
 
   MatrixXd measurement_noise_covariance_matrix(2, 2) ;
@@ -434,9 +433,9 @@ MatrixXd UKF::getLaserMeasurementPredictionCovarianceMatrix(
   measurement_noise_covariance_matrix(0, 0) = this->std_laspx_ * this->std_laspx_ ;
   measurement_noise_covariance_matrix(1, 1) = this->std_laspy_ * this->std_laspy_ ;
 
-  covariane_matrix += measurement_noise_covariance_matrix ;
+  covariance_matrix += measurement_noise_covariance_matrix ;
 
-  return covariane_matrix ;
+  return covariance_matrix ;
 }
 
 MatrixXd UKF::getLaserCrossCorrelationMatrix(
