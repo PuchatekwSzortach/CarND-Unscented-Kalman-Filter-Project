@@ -13,7 +13,8 @@ using std::vector;
  */
 UKF::UKF() {
   // if this is false, laser measurements will be ignored (except during init)
-  use_laser_ = true;
+  std::cout << "Disabling LASER now" << std::endl ;
+  use_laser_ = false;
 
   // if this is false, radar measurements will be ignored (except during init)
   use_radar_ = true;
@@ -65,11 +66,6 @@ UKF::UKF() {
 
   this->weights_ = this->getSigmaPointsWeights() ;
   this->Xsig_pred_ = MatrixXd(this->n_x_, 2 * this->n_aug_ + 1) ;
-
-  this->use_laser_ = true ;
-
-  std::cout << "NOT USING RADAR FOR NOW!" << std::endl ;
-  this->use_radar_ = false ;
 }
 
 UKF::~UKF() {}
@@ -119,12 +115,16 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
     else
     {
 
-      std::cout << "Radar measurement came in" << std::endl ;
+      // Predict new state with knowledge from previous measurement
+      double time_delta = (meas_package.timestamp_ - this->time_us_) / 1000000.0;
+      this->time_us_ = meas_package.timestamp_;
+
+      this->Prediction(time_delta);
+      this->UpdateRadar(meas_package);
 
     }
 
   }
-
 
 }
 
@@ -173,19 +173,17 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
   You'll also need to calculate the lidar NIS.
   */
 
-  std::cout << "Update Lidar called" << std::endl ;
-
   // Laser measurements have two dimensions, px and py
   int n_z = 2 ;
 
-  MatrixXd laser_measurements_predictions = this->getLaserMeasurementsPredictions(this->Xsig_pred_) ;
-  VectorXd mean_measurement_prediction = this->getMeanPrediction(laser_measurements_predictions, n_z) ;
+  MatrixXd measurements_predictions = this->getLaserMeasurementsPredictions(this->Xsig_pred_) ;
+  VectorXd mean_measurement_prediction = this->getMeanPrediction(measurements_predictions, n_z) ;
 
   MatrixXd S = this->getLaserMeasurementPredictionCovarianceMatrix(
-    laser_measurements_predictions, mean_measurement_prediction) ;
+    measurements_predictions, mean_measurement_prediction) ;
 
   MatrixXd T = this->getLaserCrossCorrelationMatrix(
-    laser_measurements_predictions, mean_measurement_prediction, n_z) ;
+    measurements_predictions, mean_measurement_prediction, n_z) ;
 
   MatrixXd K = T * S.inverse() ;
 
@@ -219,6 +217,20 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
 
   You'll also need to calculate the radar NIS.
   */
+
+  std::cout << "Update Radar" << std::endl ;
+
+  // Radar measurements have three dimensions: radial distance, angle, radial distance velocity
+  int n_z = 3 ;
+
+  MatrixXd measurements_predictions = this->getRadarMeasurementsPredictions(this->Xsig_pred_) ;
+  VectorXd mean_measurement_prediction = this->getMeanPrediction(measurements_predictions, n_z) ;
+
+  MatrixXd S = this->getRadarMeasurementPredictionCovarianceMatrix(
+    measurements_predictions, mean_measurement_prediction) ;
+
+//  MatrixXd T = this->getLaserCrossCorrelationMatrix(
+//    measurements_predictions, mean_measurement_prediction, n_z) ;
 }
 
 
@@ -403,15 +415,15 @@ MatrixXd UKF::getPredictionCovarianceMatrix(MatrixXd sigma_points_predictions, V
 
 MatrixXd UKF::getLaserMeasurementsPredictions(MatrixXd sigma_points_predictions)
 {
-  MatrixXd laser_measurements_predictions = MatrixXd(2, 2 * this->n_aug_ + 1) ;
+  MatrixXd measurements_predictions = MatrixXd(2, 2 * this->n_aug_ + 1) ;
 
   for(int index = 0 ; index < 2 * this->n_aug_ + 1 ; ++index)
   {
     // To map predictions to laser measurements space we just copy predictions px and py
-    laser_measurements_predictions.col(index) = sigma_points_predictions.col(index).head(2) ;
+    measurements_predictions.col(index) = sigma_points_predictions.col(index).head(2) ;
   }
 
-  return laser_measurements_predictions ;
+  return measurements_predictions ;
 
 }
 
@@ -455,4 +467,53 @@ MatrixXd UKF::getLaserCrossCorrelationMatrix(
 
   return cross_correlation_matrix ;
 
+}
+
+MatrixXd UKF::getRadarMeasurementsPredictions(MatrixXd sigma_points_predictions)
+{
+  MatrixXd measurements_predictions = MatrixXd(3, 2 * this->n_aug_ + 1) ;
+
+  for(int index = 0 ; index < 2 * this->n_aug_ + 1 ; ++index)
+  {
+    double px = sigma_points_predictions(0, index) ;
+    double py = sigma_points_predictions(1, index) ;
+    double v = sigma_points_predictions(2, index) ;
+    double yaw = sigma_points_predictions(3, index) ;
+
+    double vx = v * std::cos(yaw) ;
+    double vy = v * std::sin(yaw) ;
+
+    double radial_distance = std::sqrt((px * px) + (py * py)) ;
+
+    measurements_predictions(0, index) = radial_distance ;
+    measurements_predictions(1, index) = std::atan2(py, px) ;
+    measurements_predictions(2, index) = ((px * vx) + (py * vy)) / radial_distance ;
+  }
+
+  return measurements_predictions ;
+}
+
+MatrixXd UKF::getRadarMeasurementPredictionCovarianceMatrix(
+  MatrixXd radar_measurements_predictions, VectorXd mean_measurement_prediction)
+{
+  MatrixXd covariance_matrix = MatrixXd(3, 3);
+  covariance_matrix.fill(0) ;
+
+  for(int index = 0 ; index < 2 * this->n_aug_ + 1 ; ++index)
+  {
+    VectorXd difference = radar_measurements_predictions.col(index) - mean_measurement_prediction ;
+    difference(1) = Tools().getNormalizedAngle(difference(1)) ;
+
+    covariance_matrix += this->weights_(index) * difference * difference.transpose() ;
+  }
+
+  MatrixXd measurement_noise_covariance_matrix(3, 3) ;
+  measurement_noise_covariance_matrix.fill(0) ;
+  measurement_noise_covariance_matrix(0, 0) = this->std_radr_ * this->std_radr_ ;
+  measurement_noise_covariance_matrix(1, 1) = this->std_radphi_ * this->std_radphi_;
+  measurement_noise_covariance_matrix(2, 2) = this->std_radrd_ * this->std_radrd_ ;
+
+  covariance_matrix += measurement_noise_covariance_matrix ;
+
+  return covariance_matrix ;
 }

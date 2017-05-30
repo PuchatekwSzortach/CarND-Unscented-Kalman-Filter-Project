@@ -125,6 +125,12 @@ private:
     MatrixXd getLaserCrossCorrelationMatrix(
       MatrixXd measurements_predictions, VectorXd mean_measurement_prediction, int measurement_dimensions) ;
 
+    // Functions for handling radar measurements
+    MatrixXd getRadarMeasurementsPredictions(MatrixXd sigma_points_predictions) ;
+
+    MatrixXd getRadarMeasurementPredictionCovarianceMatrix(
+      MatrixXd radar_measurements_predictions, VectorXd mean_measurement_prediction) ;
+
 
 };
 
