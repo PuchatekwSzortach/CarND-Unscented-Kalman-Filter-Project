@@ -95,30 +95,35 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
 
   }
 
-  if(meas_package.sensor_type_ == MeasurementPackage::LASER) {
-
-    if(!this->use_laser_)
-    {
-      return ;
-    }
-
-    // Predict new state with knowledge from previous measurement
-    double time_delta = (meas_package.timestamp_ - this->time_us_) / 1000000.0 ;
-    this->time_us_ = meas_package.timestamp_ ;
-
-    this->Prediction(time_delta) ;
-    this->UpdateLidar(meas_package) ;
-
-  } else
-  {
-    if(!this->use_radar_)
-    {
-      return ;
-    }
-
-    std::cout << "Radar measurement came in" << std::endl ;
-
-  }
+//  if(meas_package.sensor_type_ == MeasurementPackage::LASER) {
+//
+//    if(!this->use_laser_)
+//    {
+//      return ;
+//    } else
+//    {
+//      // Predict new state with knowledge from previous measurement
+//      double time_delta = (meas_package.timestamp_ - this->time_us_) / 1000000.0;
+//      this->time_us_ = meas_package.timestamp_;
+//
+//      this->Prediction(time_delta);
+//      this->UpdateLidar(meas_package);
+//    }
+//
+//  } else
+//  {
+//    if(!this->use_radar_)
+//    {
+//      return ;
+//    }
+//    else
+//    {
+//
+//      std::cout << "Radar measurement came in" << std::endl ;
+//
+//    }
+//
+//  }
 
 
 }
@@ -231,7 +236,6 @@ void UKF::initializeUKF(MeasurementPackage meas_package)
     this->x_(4) = 0 ;
 
     this->time_us_ = meas_package.timestamp_ ;
-    this->is_initialized_ = true ;
 
   } else
   {
@@ -306,19 +310,19 @@ MatrixXd UKF::getSigmaPointsPredictions(MatrixXd augmented_sigma_points, double 
 
   for(int index = 0 ; index < 2 * this->n_aug_ + 1 ; ++index)
   {
-    VectorXd current_state = augmented_sigma_points.col(index).head(this->n_x_) ;
+    VectorXd current_state = augmented_sigma_points.col(index) ;
 
     float longitudinal_speed = current_state(2) ;
     float yaw = current_state(3) ;
     float yaw_speed = current_state(4) ;
 
-    float random_linear_acceleration = augmented_sigma_points(5, index) ;
-    float random_yaw_acceleration = augmented_sigma_points(6, index) ;
+    float random_linear_acceleration = current_state(5) ;
+    float random_yaw_acceleration = current_state(6) ;
 
     float speed_ratios = longitudinal_speed / yaw_speed ;
     float interpolated_yaw = yaw + (time_delta * yaw_speed) ;
 
-    VectorXd transition_vector = VectorXd(5) ;
+    VectorXd transition_vector = VectorXd(this->n_x_) ;
 
     if(std::abs(yaw_speed) < 0.001)
     {
@@ -332,9 +336,11 @@ MatrixXd UKF::getSigmaPointsPredictions(MatrixXd augmented_sigma_points, double 
       transition_vector(1) = speed_ratios * (-std::cos(interpolated_yaw) + std::cos(yaw));
     }
 
+    transition_vector(2) = 0 ;
     transition_vector(3) = yaw_speed * time_delta ;
+    transition_vector(4) = 0 ;
 
-    VectorXd noise_vector = VectorXd(5) ;
+    VectorXd noise_vector = VectorXd(this->n_x_) ;
     double half_squared_time_delta = 0.5 * time_delta * time_delta ;
 
     noise_vector(0) = half_squared_time_delta * std::cos(yaw) * random_linear_acceleration ;

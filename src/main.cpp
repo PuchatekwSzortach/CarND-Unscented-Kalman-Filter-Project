@@ -123,12 +123,6 @@ int main()
           double v1 = cos(yaw)*v;
           double v2 = sin(yaw)*v;
 
-//          double p_x = x_gt + 1 ;
-//          double p_y = y_gt + 1 ;
-//
-//          double v1 = vx_gt - 2;
-//          double v2 = vy_gt - 3;
-
           estimate(0) = p_x;
           estimate(1) = p_y;
           estimate(2) = v1;
