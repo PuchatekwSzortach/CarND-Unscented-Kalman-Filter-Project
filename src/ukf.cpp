@@ -25,10 +25,14 @@ UKF::UKF() {
   P_ = MatrixXd(5, 5);
 
   // Process noise standard deviation longitudinal acceleration in m/s^2
+  // Assumed your typical bike will be accelarating at most from stop to 30km/h in 10sec, which gives
+  // about 8m/s^2 acceleration. Taking half of it for one std gives 4 m/s^2
   std_a_ = 4;
 
   // Process noise standard deviation yaw acceleration in rad/s^2
-  std_yawdd_ = M_PI / 4.0;
+  // Assumed a typical biker would be doing a 90deg turn in 2 sec, which gives PI/4 rad/s^2 acceleration.
+  // Taking half of it for one std gives PI/8 rad/s^2
+  std_yawdd_ = M_PI / 8.0;
 
   // Laser measurement noise standard deviation position1 in m
   std_laspx_ = 0.15;
@@ -153,9 +157,6 @@ void UKF::Prediction(double delta_t) {
 
   this->P_ = this->getPredictionCovarianceMatrix(this->Xsig_pred_, this->x_) ;
 
-  std::cout << "Prediction step" << std::endl ;
-  std::cout << "After prediction x is \n" << this->x_ << "\nand P is \n" << this->P_ << std::endl ;
-
 }
 
 /**
@@ -178,7 +179,7 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
   MatrixXd measurements_predictions = this->getLaserMeasurementsPredictions(this->Xsig_pred_) ;
   VectorXd mean_measurement_prediction = this->getMeanPrediction(measurements_predictions, n_z) ;
 
-  MatrixXd S = this->getLaserMeasurementPredictionCovarianceMatrix(
+  MatrixXd S = this->getLaserMeasurementPredictionsCovarianceMatrix(
     measurements_predictions, mean_measurement_prediction) ;
 
   MatrixXd T = this->getLaserCrossCorrelationMatrix(measurements_predictions, mean_measurement_prediction) ;
@@ -219,7 +220,7 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
   MatrixXd measurements_predictions = this->getRadarMeasurementsPredictions(this->Xsig_pred_) ;
   VectorXd mean_measurement_prediction = this->getMeanPrediction(measurements_predictions, n_z) ;
 
-  MatrixXd S = this->getRadarMeasurementPredictionCovarianceMatrix(
+  MatrixXd S = this->getRadarMeasurementPredictionsCovarianceMatrix(
     measurements_predictions, mean_measurement_prediction) ;
 
   MatrixXd T = this->getRadarCrossCorrelationMatrix(measurements_predictions, mean_measurement_prediction) ;
@@ -260,8 +261,18 @@ void UKF::initializeUKF(MeasurementPackage meas_package)
 
   } else
   {
-    std::cout << "RADAR measurement to initialize with, we don't handle that yet" << std::endl ;
-    exit(0) ;
+    double radial_distance = meas_package.raw_measurements_(0) ;
+    double angle = meas_package.raw_measurements_(1) ;
+    double radial_speed = meas_package.raw_measurements_(2) ;
+
+    this->x_(0) = radial_distance * std::cos(angle) ;
+    this->x_(1) = radial_distance * std::sin(angle) ;
+
+    this->x_(2) = radial_speed ;
+    this->x_(3) = angle ;
+    this->x_(4) = 0 ;
+
+    this->time_us_ = meas_package.timestamp_ ;
   }
 
   // Initialize covariance matrix P
@@ -436,7 +447,7 @@ MatrixXd UKF::getLaserMeasurementsPredictions(MatrixXd sigma_points_predictions)
 
 }
 
-MatrixXd UKF::getLaserMeasurementPredictionCovarianceMatrix(
+MatrixXd UKF::getLaserMeasurementPredictionsCovarianceMatrix(
   MatrixXd laser_measurements_predictions, VectorXd mean_measurement_prediction)
 {
   MatrixXd covariance_matrix = MatrixXd(2, 2);
@@ -502,7 +513,7 @@ MatrixXd UKF::getRadarMeasurementsPredictions(MatrixXd sigma_points_predictions)
   return measurements_predictions ;
 }
 
-MatrixXd UKF::getRadarMeasurementPredictionCovarianceMatrix(
+MatrixXd UKF::getRadarMeasurementPredictionsCovarianceMatrix(
   MatrixXd radar_measurements_predictions, VectorXd mean_measurement_prediction)
 {
   MatrixXd covariance_matrix = MatrixXd(3, 3);

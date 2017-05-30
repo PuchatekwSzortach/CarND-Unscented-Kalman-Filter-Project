@@ -112,7 +112,6 @@ int main()
           ukf.ProcessMeasurement(meas_package);
 
           //Push the current estimated x,y positon from the Kalman filter's state vector
-
           VectorXd estimate(4);
 
           double p_x = ukf.x_(0);
