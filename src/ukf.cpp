@@ -98,7 +98,6 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
   //create sigma point matrix
   MatrixXd sigma_points_matrix = this->getSigmaPointsMatrix();
   MatrixXd augmented_sigma_points_matrix = this->getAugmentedSigmaPointsMatrix(sigma_points_matrix) ;
-  std::cout << "Augmented sigma points matrix\n" << augmented_sigma_points_matrix << std::endl ;
 
   if(meas_package.sensor_type_ == MeasurementPackage::LASER) {
 
@@ -111,6 +110,8 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
     float time_delta = (meas_package.timestamp_ - this->time_us_) / 1000000.0 ;
     this->time_us_ = meas_package.timestamp_ ;
 
+    MatrixXd predictions_matrix = this->getSigmaPointsPredictions(augmented_sigma_points_matrix, time_delta) ;
+    std::cout << "Predictions matrix is:\n" << predictions_matrix << std::endl ;
 
   } else
   {
@@ -253,4 +254,54 @@ MatrixXd UKF::getAugmentedSigmaPointsMatrix(MatrixXd sigma_points_matrix)
   }
 
   return augmented_sigma_points_matrix ;
+}
+
+MatrixXd UKF::getSigmaPointsPredictions(MatrixXd augmented_sigma_points_matrix, double time_delta)
+{
+  MatrixXd predictionsMatrix = MatrixXd(this->n_x_, 2 * this->n_aug_ + 1) ;
+
+  for(int index = 0 ; index < 2 * this->n_aug_ + 1 ; ++index)
+  {
+    VectorXd current_state = augmented_sigma_points_matrix.col(index).head(this->n_x_) ;
+
+    float longitudinal_speed = current_state(2) ;
+    float yaw = current_state(3) ;
+    float yaw_speed = current_state(4) ;
+
+    float random_linear_acceleration = augmented_sigma_points_matrix(5, index) ;
+    float random_yaw_acceleration = augmented_sigma_points_matrix(6, index) ;
+
+    float speed_ratios = longitudinal_speed / yaw_speed ;
+    float interpolated_yaw = yaw + (time_delta * yaw_speed) ;
+
+    VectorXd transition_vector = VectorXd(5) ;
+
+    if(std::abs(yaw_speed) < 0.001)
+    {
+      transition_vector(0) = time_delta * longitudinal_speed * std::cos(yaw) ;
+      transition_vector(1) = time_delta * longitudinal_speed * std::sin(yaw) ;
+
+    }
+    else
+    {
+      transition_vector(0) = speed_ratios * (std::sin(interpolated_yaw) - std::sin(yaw));
+      transition_vector(1) = speed_ratios * (-std::cos(interpolated_yaw) + std::cos(yaw));
+    }
+
+    transition_vector(3) = yaw_speed * time_delta ;
+
+    VectorXd noise_vector = VectorXd(5) ;
+    double half_squared_time_delta = 0.5 * time_delta * time_delta ;
+
+    noise_vector(0) = half_squared_time_delta * std::cos(yaw) * random_linear_acceleration ;
+    noise_vector(1) = half_squared_time_delta * std::sin(yaw) * random_linear_acceleration ;
+    noise_vector(2) = time_delta * random_linear_acceleration ;
+    noise_vector(3) = half_squared_time_delta * random_yaw_acceleration ;
+    noise_vector(4) = time_delta * random_yaw_acceleration ;
+
+    predictionsMatrix.col(index) = current_state + transition_vector + noise_vector ;
+
+  }
+
+  return predictionsMatrix ;
 }

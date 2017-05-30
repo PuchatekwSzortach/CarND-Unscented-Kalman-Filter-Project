@@ -109,6 +109,7 @@ private:
 
     MatrixXd getSigmaPointsMatrix() ;
     MatrixXd getAugmentedSigmaPointsMatrix(MatrixXd sigma_points_matrix) ;
+    MatrixXd getSigmaPointsPredictions(MatrixXd augmented_sigma_points_matrix, double time_delta) ;
 
 };
 
