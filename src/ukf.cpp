@@ -424,7 +424,6 @@ MatrixXd UKF::getLaserMeasurementPredictionCovarianceMatrix(
   for(int index = 0 ; index < 2 * this->n_aug_ + 1 ; ++index)
   {
     VectorXd difference = laser_measurements_predictions.col(index) - mean_measurement_prediction ;
-
     covariance_matrix += this->weights_(index) * difference * difference.transpose() ;
   }
 
@@ -439,9 +438,8 @@ MatrixXd UKF::getLaserMeasurementPredictionCovarianceMatrix(
 }
 
 MatrixXd UKF::getLaserCrossCorrelationMatrix(
-  MatrixXd measurements_predictions, VectorXd measurement_prediction, int measurement_dimensions)
+  MatrixXd measurements_predictions, VectorXd mean_measurement_prediction, int measurement_dimensions)
 {
-
   MatrixXd cross_correlation_matrix = MatrixXd(this->n_x_, measurement_dimensions);
   cross_correlation_matrix.fill(0) ;
 
@@ -449,7 +447,7 @@ MatrixXd UKF::getLaserCrossCorrelationMatrix(
   {
 
     VectorXd state_difference = this->Xsig_pred_.col(index) - this->x_ ;
-    VectorXd measurement_difference = measurements_predictions.col(index) - measurement_prediction ;
+    VectorXd measurement_difference = measurements_predictions.col(index) - mean_measurement_prediction ;
 
     cross_correlation_matrix += this->weights_(index) * state_difference * measurement_difference.transpose() ;
 

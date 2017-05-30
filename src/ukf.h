@@ -123,7 +123,7 @@ private:
       MatrixXd laser_measurements_predictions, VectorXd mean_measurement_prediction) ;
 
     MatrixXd getLaserCrossCorrelationMatrix(
-      MatrixXd measurements_predictions, VectorXd measurement_prediction, int measurement_dimensions) ;
+      MatrixXd measurements_predictions, VectorXd mean_measurement_prediction, int measurement_dimensions) ;
 
 
 };
