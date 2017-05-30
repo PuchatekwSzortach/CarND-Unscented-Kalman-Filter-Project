@@ -124,11 +124,8 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
 
       this->Prediction(time_delta);
       this->UpdateRadar(meas_package);
-
     }
-
   }
-
 }
 
 /**
@@ -392,7 +389,7 @@ VectorXd UKF::getSigmaPointsWeights()
 {
   VectorXd weights = VectorXd(2 * this->n_aug_ + 1);
 
-  weights(0) = this->lambda_ / (this->lambda_ + this->n_aug_) ;
+  weights(0) = double(this->lambda_) / double(this->lambda_ + this->n_aug_) ;
 
   for(int index = 1 ; index < 2 * this->n_aug_ + 1 ; ++index)
   {
