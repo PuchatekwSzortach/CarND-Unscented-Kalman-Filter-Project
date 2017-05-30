@@ -90,7 +90,7 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
     this->initializeUKF(meas_package) ;
     this->is_initialized_ = true ;
 
-    // After initialization return, we won't be doing prediction and update cycle on initialization
+    // After initialization return, no need to do prediction and update cycle on initialization
     return ;
 
   }
@@ -107,7 +107,7 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
     this->time_us_ = meas_package.timestamp_ ;
 
     this->Prediction(time_delta) ;
-
+    this->UpdateLidar(meas_package) ;
 
   } else
   {
@@ -138,12 +138,12 @@ void UKF::Prediction(double delta_t) {
   */
 
   //create sigma point matrix
-  MatrixXd sigma_points_matrix = this->getSigmaPointsMatrix();
-  MatrixXd augmented_sigma_points_matrix = this->getAugmentedSigmaPointsMatrix(sigma_points_matrix) ;
+  MatrixXd sigma_points = this->getSigmaPoints();
+  MatrixXd augmented_sigma_points = this->getAugmentedSigmaPoints(sigma_points) ;
 
   // Create sigma predictions, compute mean predictions and prediction covariance matrix
-  this->Xsig_pred_ = this->getSigmaPointsPredictions(augmented_sigma_points_matrix, delta_t) ;
-  this->x_ = this->getMeanPrediction(this->Xsig_pred_) ;
+  this->Xsig_pred_ = this->getSigmaPointsPredictions(augmented_sigma_points, delta_t) ;
+  this->x_ = this->getMeanPrediction(this->Xsig_pred_, this->n_x_) ;
   this->P_ = this->getPredictionCovarianceMatrix(this->Xsig_pred_, this->x_) ;
 
 }
@@ -161,6 +161,21 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
 
   You'll also need to calculate the lidar NIS.
   */
+
+  std::cout << "Update Lidar called" << std::endl ;
+
+  // Laser measurements have two dimensions, px and py
+  int n_z = 2 ;
+
+  MatrixXd laser_measurements_predictions = this->getLaserMeasurementsPredictions(this->Xsig_pred_) ;
+  VectorXd mean_measurement_prediction = this->getMeanPrediction(laser_measurements_predictions, n_z) ;
+
+  MatrixXd laser_measurement_prediction_covariane_matrix = this->getLaserMeasurementPredictionCovarianceMatrix(
+    laser_measurements_predictions, mean_measurement_prediction) ;
+
+  MatrixXd cross_correlation_matrix = this->getLaserCrossCorrelationMatrix(
+    laser_measurements_predictions, mean_measurement_prediction, n_z) ;
+
 }
 
 /**
@@ -205,12 +220,12 @@ void UKF::initializeUKF(MeasurementPackage meas_package)
   this->P_.setIdentity(5, 5) ;
 }
 
-MatrixXd UKF::getSigmaPointsMatrix()
+MatrixXd UKF::getSigmaPoints()
 {
   //create sigma point matrix
-  MatrixXd sigma_points_matrix = MatrixXd(this->n_x_, 2 * this->n_x_ + 1) ;
+  MatrixXd sigma_points = MatrixXd(this->n_x_, 2 * this->n_x_ + 1) ;
 
-  sigma_points_matrix.col(0) = this->x_ ;
+  sigma_points.col(0) = this->x_ ;
 
   //calculate square root of P
   MatrixXd P_root = this->P_.llt().matrixL();
@@ -219,16 +234,16 @@ MatrixXd UKF::getSigmaPointsMatrix()
 
   for(int index = 0 ; index < this->n_x_ ; ++index)
   {
-    sigma_points_matrix.col(index + 1) = this->x_ + (lambda_scaling * P_root.col(index)) ;
-    sigma_points_matrix.col(index + this->n_x_ + 1) = this->x_ - (lambda_scaling * P_root.col(index)) ;
+    sigma_points.col(index + 1) = this->x_ + (lambda_scaling * P_root.col(index)) ;
+    sigma_points.col(index + this->n_x_ + 1) = this->x_ - (lambda_scaling * P_root.col(index)) ;
 
   }
 
-  return sigma_points_matrix ;
+  return sigma_points ;
 
 }
 
-MatrixXd UKF::getAugmentedSigmaPointsMatrix(MatrixXd sigma_points_matrix)
+MatrixXd UKF::getAugmentedSigmaPoints(MatrixXd sigma_points)
 {
   // Create augmented vector
   VectorXd x_augmented = VectorXd(this->n_aug_) ;
@@ -245,37 +260,37 @@ MatrixXd UKF::getAugmentedSigmaPointsMatrix(MatrixXd sigma_points_matrix)
   //create augmented square root matrix
   MatrixXd P_augmented_root = P_augmented.llt().matrixL();
 
-  MatrixXd augmented_sigma_points_matrix = MatrixXd(this->n_aug_, 2 * this->n_aug_ + 1) ;
-  augmented_sigma_points_matrix.col(0) = x_augmented ;
+  MatrixXd augmented_sigma_points = MatrixXd(this->n_aug_, 2 * this->n_aug_ + 1) ;
+  augmented_sigma_points.col(0) = x_augmented ;
 
   double lambda_scaling = std::sqrt(this->lambda_ + this->n_aug_) ;
 
   for(int index = 0 ; index < this->n_aug_ ; ++index)
   {
-    augmented_sigma_points_matrix.col(index + 1) =
+    augmented_sigma_points.col(index + 1) =
       x_augmented + (lambda_scaling * P_augmented_root.col(index));
 
-    augmented_sigma_points_matrix.col(index + this->n_aug_ + 1) =
+    augmented_sigma_points.col(index + this->n_aug_ + 1) =
       x_augmented - (lambda_scaling * P_augmented_root.col(index));
   }
 
-  return augmented_sigma_points_matrix ;
+  return augmented_sigma_points ;
 }
 
-MatrixXd UKF::getSigmaPointsPredictions(MatrixXd augmented_sigma_points_matrix, double time_delta)
+MatrixXd UKF::getSigmaPointsPredictions(MatrixXd augmented_sigma_points, double time_delta)
 {
-  MatrixXd predictionsMatrix = MatrixXd(this->n_x_, 2 * this->n_aug_ + 1) ;
+  MatrixXd predictions = MatrixXd(this->n_x_, 2 * this->n_aug_ + 1) ;
 
   for(int index = 0 ; index < 2 * this->n_aug_ + 1 ; ++index)
   {
-    VectorXd current_state = augmented_sigma_points_matrix.col(index).head(this->n_x_) ;
+    VectorXd current_state = augmented_sigma_points.col(index).head(this->n_x_) ;
 
     float longitudinal_speed = current_state(2) ;
     float yaw = current_state(3) ;
     float yaw_speed = current_state(4) ;
 
-    float random_linear_acceleration = augmented_sigma_points_matrix(5, index) ;
-    float random_yaw_acceleration = augmented_sigma_points_matrix(6, index) ;
+    float random_linear_acceleration = augmented_sigma_points(5, index) ;
+    float random_yaw_acceleration = augmented_sigma_points(6, index) ;
 
     float speed_ratios = longitudinal_speed / yaw_speed ;
     float interpolated_yaw = yaw + (time_delta * yaw_speed) ;
@@ -305,11 +320,11 @@ MatrixXd UKF::getSigmaPointsPredictions(MatrixXd augmented_sigma_points_matrix, 
     noise_vector(3) = half_squared_time_delta * random_yaw_acceleration ;
     noise_vector(4) = time_delta * random_yaw_acceleration ;
 
-    predictionsMatrix.col(index) = current_state + transition_vector + noise_vector ;
+    predictions.col(index) = current_state + transition_vector + noise_vector ;
 
   }
 
-  return predictionsMatrix ;
+  return predictions ;
 }
 
 VectorXd UKF::getSigmaPointsWeights()
@@ -326,27 +341,27 @@ VectorXd UKF::getSigmaPointsWeights()
   return weights ;
 }
 
-VectorXd UKF::getMeanPrediction(MatrixXd sigma_points_predictions_matrix)
+VectorXd UKF::getMeanPrediction(MatrixXd sigma_points_predictions, int dimensions)
 {
-  VectorXd mean_prediction = VectorXd(this->n_x_);
+  VectorXd mean_prediction = VectorXd(dimensions);
   mean_prediction.fill(0);
 
   for(int index = 0 ; index <  2 * this->n_aug_ + 1 ; ++index)
   {
-    mean_prediction += this->weights_(index) * sigma_points_predictions_matrix.col(index) ;
+    mean_prediction += this->weights_(index) * sigma_points_predictions.col(index) ;
   }
 
   return mean_prediction ;
 }
 
-MatrixXd UKF::getPredictionCovarianceMatrix(MatrixXd sigma_points_predictions_matrix, VectorXd mean_prediction)
+MatrixXd UKF::getPredictionCovarianceMatrix(MatrixXd sigma_points_predictions, VectorXd mean_prediction)
 {
   MatrixXd covariance_matrix = MatrixXd(this->n_x_, this->n_x_);
   covariance_matrix.fill(0) ;
 
   for(int index = 0 ; index < 2 * this->n_aug_ + 1 ; ++index)
   {
-    VectorXd difference = sigma_points_predictions_matrix.col(index) - mean_prediction ;
+    VectorXd difference = sigma_points_predictions.col(index) - mean_prediction ;
 
     // Normalize yaw angle to <-PI, PI> interval
     difference(3) = Tools().getNormalizedAngle(difference(3)) ;
@@ -355,4 +370,63 @@ MatrixXd UKF::getPredictionCovarianceMatrix(MatrixXd sigma_points_predictions_ma
   }
 
   return covariance_matrix ;
+}
+
+MatrixXd UKF::getLaserMeasurementsPredictions(MatrixXd sigma_points_predictions)
+{
+  MatrixXd laser_measurements_predictions = MatrixXd(2, 2 * this->n_aug_ + 1) ;
+
+  for(int index = 0 ; index < 2 * this->n_aug_ + 1 ; ++index)
+  {
+    // For laser measurements we just copy prediction px and py
+    laser_measurements_predictions(0, index) = sigma_points_predictions(0, index) ;
+    laser_measurements_predictions(1, index) = sigma_points_predictions(1, index) ;
+  }
+
+  return laser_measurements_predictions ;
+
+}
+
+MatrixXd UKF::getLaserMeasurementPredictionCovarianceMatrix(
+  MatrixXd laser_measurements_predictions, VectorXd mean_measurement_prediction)
+{
+
+  MatrixXd covariane_matrix = MatrixXd(2, 2);
+
+  for(int index = 0 ; index < 2 * this->n_aug_ + 1 ; ++index)
+  {
+    VectorXd difference = laser_measurements_predictions.col(index) - mean_measurement_prediction ;
+
+    covariane_matrix += this->weights_(index) * difference * difference.transpose() ;
+  }
+
+  MatrixXd measurement_noise_covariance_matrix(2, 2) ;
+  measurement_noise_covariance_matrix.fill(0) ;
+  measurement_noise_covariance_matrix(0, 0) = this->std_laspx_ * this->std_laspx_ ;
+  measurement_noise_covariance_matrix(1, 1) = this->std_laspy_ * this->std_laspy_ ;
+
+  covariane_matrix += measurement_noise_covariance_matrix ;
+
+  return covariane_matrix ;
+}
+
+MatrixXd UKF::getLaserCrossCorrelationMatrix(
+  MatrixXd measurements_predictions, VectorXd measurement_prediction, int measurement_dimensions)
+{
+
+  MatrixXd cross_correlation_matrix = MatrixXd(this->n_x_, measurement_dimensions);
+  cross_correlation_matrix.fill(0) ;
+
+  for(int index = 0 ; index < 2 * this->n_aug_ + 1 ; ++index)
+  {
+
+    VectorXd state_difference = this->Xsig_pred_.col(index) - this->x_ ;
+    VectorXd measurement_difference = measurements_predictions.col(index) - measurement_prediction ;
+
+    cross_correlation_matrix += this->weights_(index) * state_difference * measurement_difference.transpose() ;
+
+  }
+
+  return cross_correlation_matrix ;
+
 }

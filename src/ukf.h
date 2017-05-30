@@ -107,13 +107,23 @@ private:
 
     void initializeUKF(MeasurementPackage meas_package) ;
 
-    MatrixXd getSigmaPointsMatrix() ;
-    MatrixXd getAugmentedSigmaPointsMatrix(MatrixXd sigma_points_matrix) ;
-    MatrixXd getSigmaPointsPredictions(MatrixXd augmented_sigma_points_matrix, double time_delta) ;
+    // Functions for computing sigma points and friends
+    MatrixXd getSigmaPoints() ;
+    MatrixXd getAugmentedSigmaPoints(MatrixXd sigma_points) ;
+    MatrixXd getSigmaPointsPredictions(MatrixXd augmented_sigma_points, double time_delta) ;
 
     VectorXd getSigmaPointsWeights() ;
-    VectorXd getMeanPrediction(MatrixXd sigma_points_predictions_matrix) ;
-    MatrixXd getPredictionCovarianceMatrix(MatrixXd sigma_points_predictions_matrix, VectorXd mean_prediction) ;
+    VectorXd getMeanPrediction(MatrixXd sigma_points_predictions, int dimensions) ;
+    MatrixXd getPredictionCovarianceMatrix(MatrixXd sigma_points_predictions, VectorXd mean_prediction) ;
+
+    // Functions for handling laser measurements
+    MatrixXd getLaserMeasurementsPredictions(MatrixXd sigma_points_predictions) ;
+
+    MatrixXd getLaserMeasurementPredictionCovarianceMatrix(
+      MatrixXd laser_measurements_predictions, VectorXd mean_measurement_prediction) ;
+
+    MatrixXd getLaserCrossCorrelationMatrix(
+      MatrixXd measurements_predictions, VectorXd measurement_prediction, int measurement_dimensions) ;
 
 
 };
