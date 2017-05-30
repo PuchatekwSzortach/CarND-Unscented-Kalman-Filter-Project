@@ -108,6 +108,7 @@ private:
     void initializeUKF(MeasurementPackage meas_package) ;
 
     MatrixXd getSigmaPointsMatrix() ;
+    MatrixXd getAugmentedSigmaPointsMatrix(MatrixXd sigma_points_matrix) ;
 
 };
 

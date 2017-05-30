@@ -97,7 +97,8 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
 
   //create sigma point matrix
   MatrixXd sigma_points_matrix = this->getSigmaPointsMatrix();
-  std::cout << "Sigma points matrix\n" << sigma_points_matrix << std::endl ;
+  MatrixXd augmented_sigma_points_matrix = this->getAugmentedSigmaPointsMatrix(sigma_points_matrix) ;
+  std::cout << "Augmented sigma points matrix\n" << augmented_sigma_points_matrix << std::endl ;
 
   if(meas_package.sensor_type_ == MeasurementPackage::LASER) {
 
@@ -218,4 +219,38 @@ MatrixXd UKF::getSigmaPointsMatrix()
 
   return sigma_points_matrix ;
 
+}
+
+MatrixXd UKF::getAugmentedSigmaPointsMatrix(MatrixXd sigma_points_matrix)
+{
+  // Create augmented vector
+  VectorXd x_augmented = VectorXd(this->n_aug_) ;
+  x_augmented.fill(0) ;
+  x_augmented.head(5) = this->x_ ;
+
+  // Create augmented covariance matrix
+  MatrixXd P_augmented = MatrixXd(this->n_aug_, this->n_aug_) ;
+  P_augmented.fill(0) ;
+  P_augmented.topLeftCorner(this->n_x_, this->n_x_) = this->P_ ;
+  P_augmented(5, 5) = this->std_a_ * this->std_a_ ;
+  P_augmented(6, 6) = this->std_yawdd_ * this->std_yawdd_ ;
+
+  //create augmented square root matrix
+  MatrixXd P_augmented_root = P_augmented.llt().matrixL();
+
+  MatrixXd augmented_sigma_points_matrix = MatrixXd(this->n_aug_, 2 * this->n_aug_ + 1) ;
+  augmented_sigma_points_matrix.col(0) = x_augmented ;
+
+  double lambda_scaling = std::sqrt(this->lambda_ + this->n_aug_) ;
+
+  for(int index = 0 ; index < this->n_aug_ ; ++index)
+  {
+    augmented_sigma_points_matrix.col(index + 1) =
+      x_augmented + (lambda_scaling * P_augmented_root.col(index));
+
+    augmented_sigma_points_matrix.col(index + this->n_aug_ + 1) =
+      x_augmented - (lambda_scaling * P_augmented_root.col(index));
+  }
+
+  return augmented_sigma_points_matrix ;
 }
