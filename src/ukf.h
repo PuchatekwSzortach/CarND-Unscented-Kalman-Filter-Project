@@ -102,6 +102,13 @@ public:
    * @param meas_package The measurement at k+1
    */
   void UpdateRadar(MeasurementPackage meas_package);
+
+private:
+
+    void initializeUKF(MeasurementPackage meas_package) ;
+
+    MatrixXd getSigmaPointsMatrix() ;
+
 };
 
 #endif /* UKF_H */

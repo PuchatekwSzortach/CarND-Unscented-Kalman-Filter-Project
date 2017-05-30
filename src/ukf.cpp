@@ -24,10 +24,10 @@ UKF::UKF() {
   P_ = MatrixXd(5, 5);
 
   // Process noise standard deviation longitudinal acceleration in m/s^2
-  std_a_ = 30;
+  std_a_ = 4;
 
   // Process noise standard deviation yaw acceleration in rad/s^2
-  std_yawdd_ = 30;
+  std_yawdd_ = M_PI / 4.0;
 
   // Laser measurement noise standard deviation position1 in m
   std_laspx_ = 0.15;
@@ -51,6 +51,25 @@ UKF::UKF() {
 
   Hint: one or more values initialized above might be wildly off...
   */
+
+  // Initialized weights matrix to some vector.
+  // Exact dimension will depend on type of sensor we are using at given update
+  this->weights_ = VectorXd(15) ;
+
+  // We will use a CTRV model and will be predicting 5 variables:
+  // x and y positions, longitudinal speed, yaw and yaw rate
+  this->n_x_ = 5 ;
+
+  // Augmented state has two additional dimensions due to longitudinal and yaw accelerations
+  this->n_aug_ = this->n_x_ + 2 ;
+
+  // Per lecture notes recommendations
+  this->lambda_ = 3 - this->n_x_ ;
+
+  this->use_laser_ = true ;
+
+  std::cout << "NOT USING RADAR FOR NOW!" << std::endl ;
+  this->use_radar_ = false ;
 }
 
 UKF::~UKF() {}
@@ -66,6 +85,45 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
   Complete this function! Make sure you switch between lidar and radar
   measurements.
   */
+  if(!this->is_initialized_) {
+
+    this->initializeUKF(meas_package) ;
+    this->is_initialized_ = true ;
+
+    // After initialization return, we won't be doing prediction and update cycle on initialization
+    return ;
+
+  }
+
+  //create sigma point matrix
+  MatrixXd sigma_points_matrix = this->getSigmaPointsMatrix();
+  std::cout << "Sigma points matrix\n" << sigma_points_matrix << std::endl ;
+
+  if(meas_package.sensor_type_ == MeasurementPackage::LASER) {
+
+    if(!this->use_laser_)
+    {
+      return ;
+    }
+
+    // Predict new state with knowledge from previous measurement
+    float time_delta = (meas_package.timestamp_ - this->time_us_) / 1000000.0 ;
+    this->time_us_ = meas_package.timestamp_ ;
+
+
+  } else
+  {
+    if(!this->use_radar_)
+    {
+      return ;
+    }
+
+    std::cout << "Radar measurement came in" << std::endl ;
+
+
+  }
+
+
 }
 
 /**
@@ -110,4 +168,54 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
 
   You'll also need to calculate the radar NIS.
   */
+}
+
+
+void UKF::initializeUKF(MeasurementPackage meas_package)
+{
+  if(meas_package.sensor_type_ == MeasurementPackage::LASER)
+  {
+    // x and y positions, known from laser
+    this->x_(0) = meas_package.raw_measurements_(0) ;
+    this->x_(1) = meas_package.raw_measurements_(1) ;
+
+    // Velocity, yaw and yaw rate are unknown, set them to zero
+    this->x_(2) = 0 ;
+    this->x_(3) = 0 ;
+    this->x_(4) = 0 ;
+
+    this->time_us_ = meas_package.timestamp_ ;
+    this->is_initialized_ = true ;
+
+  } else
+  {
+    std::cout << "RADAR measurement to initialize with, we don't handle that yet" << std::endl ;
+    exit(0) ;
+  }
+
+  // Initialize covariance matrix P
+  this->P_.setIdentity(5, 5) ;
+}
+
+MatrixXd UKF::getSigmaPointsMatrix()
+{
+  //create sigma point matrix
+  MatrixXd sigma_points_matrix = MatrixXd(this->n_x_, 2 * this->n_x_ + 1) ;
+
+  sigma_points_matrix.col(0) = this->x_ ;
+
+  //calculate square root of P
+  MatrixXd P_root = this->P_.llt().matrixL();
+
+  double lambda_scaling = std::sqrt(this->lambda_ + this->n_x_) ;
+
+  for(int index = 0 ; index < this->n_x_ ; ++index)
+  {
+    sigma_points_matrix.col(index + 1) = this->x_ + (lambda_scaling * P_root.col(index)) ;
+    sigma_points_matrix.col(index + this->n_x_ + 1) = this->x_ - (lambda_scaling * P_root.col(index)) ;
+
+  }
+
+  return sigma_points_matrix ;
+
 }
