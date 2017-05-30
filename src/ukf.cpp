@@ -13,8 +13,7 @@ using std::vector;
  */
 UKF::UKF() {
   // if this is false, laser measurements will be ignored (except during init)
-  std::cout << "Disabling LASER now" << std::endl ;
-  use_laser_ = false;
+  use_laser_ = true;
 
   // if this is false, radar measurements will be ignored (except during init)
   use_radar_ = true;
@@ -182,8 +181,7 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
   MatrixXd S = this->getLaserMeasurementPredictionCovarianceMatrix(
     measurements_predictions, mean_measurement_prediction) ;
 
-  MatrixXd T = this->getLaserCrossCorrelationMatrix(
-    measurements_predictions, mean_measurement_prediction, n_z) ;
+  MatrixXd T = this->getLaserCrossCorrelationMatrix(measurements_predictions, mean_measurement_prediction) ;
 
   MatrixXd K = T * S.inverse() ;
 
@@ -199,9 +197,6 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
 
   // Normalize yaw angle
   this->x_(3) = Tools().getNormalizedAngle(this->x_(3)) ;
-
-  std::cout << "After update x is \n" << this->x_ << "\nand P is \n" << this->P_ << std::endl ;
-
 }
 
 /**
@@ -218,8 +213,6 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
   You'll also need to calculate the radar NIS.
   */
 
-  std::cout << "Update Radar" << std::endl ;
-
   // Radar measurements have three dimensions: radial distance, angle, radial distance velocity
   int n_z = 3 ;
 
@@ -229,8 +222,24 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
   MatrixXd S = this->getRadarMeasurementPredictionCovarianceMatrix(
     measurements_predictions, mean_measurement_prediction) ;
 
-//  MatrixXd T = this->getLaserCrossCorrelationMatrix(
-//    measurements_predictions, mean_measurement_prediction, n_z) ;
+  MatrixXd T = this->getRadarCrossCorrelationMatrix(measurements_predictions, mean_measurement_prediction) ;
+
+  MatrixXd K = T * S.inverse() ;
+
+  VectorXd measurement(3) ;
+  measurement(0) = meas_package.raw_measurements_(0) ;
+  measurement(1) = meas_package.raw_measurements_(1) ;
+  measurement(2) = meas_package.raw_measurements_(2) ;
+
+  VectorXd measurement_difference = measurement - mean_measurement_prediction ;
+  measurement_difference(1) = Tools().getNormalizedAngle(measurement_difference(1)) ;
+
+  // Update
+  this->x_ = this->x_ + (K * measurement_difference) ;
+  this->P_ = this->P_ - (K * S * K.transpose()) ;
+
+  // Normalize yaw angle
+  this->x_(3) = Tools().getNormalizedAngle(this->x_(3)) ;
 }
 
 
@@ -450,9 +459,9 @@ MatrixXd UKF::getLaserMeasurementPredictionCovarianceMatrix(
 }
 
 MatrixXd UKF::getLaserCrossCorrelationMatrix(
-  MatrixXd measurements_predictions, VectorXd mean_measurement_prediction, int measurement_dimensions)
+  MatrixXd measurements_predictions, VectorXd mean_measurement_prediction)
 {
-  MatrixXd cross_correlation_matrix = MatrixXd(this->n_x_, measurement_dimensions);
+  MatrixXd cross_correlation_matrix = MatrixXd(this->n_x_, 2);
   cross_correlation_matrix.fill(0) ;
 
   for(int index = 0 ; index < 2 * this->n_aug_ + 1 ; ++index)
@@ -516,4 +525,26 @@ MatrixXd UKF::getRadarMeasurementPredictionCovarianceMatrix(
   covariance_matrix += measurement_noise_covariance_matrix ;
 
   return covariance_matrix ;
+}
+
+MatrixXd UKF::getRadarCrossCorrelationMatrix(
+  MatrixXd measurements_predictions, VectorXd mean_measurement_prediction)
+{
+  MatrixXd cross_correlation_matrix = MatrixXd(this->n_x_, 3);
+  cross_correlation_matrix.fill(0) ;
+
+  for(int index = 0 ; index < 2 * this->n_aug_ + 1 ; ++index)
+  {
+
+    VectorXd state_difference = this->Xsig_pred_.col(index) - this->x_ ;
+    state_difference(3) = Tools().getNormalizedAngle(state_difference(3)) ;
+
+    VectorXd measurement_difference = measurements_predictions.col(index) - mean_measurement_prediction ;
+    measurement_difference(1) = Tools().getNormalizedAngle(measurement_difference(1)) ;
+
+    cross_correlation_matrix += this->weights_(index) * state_difference * measurement_difference.transpose() ;
+
+  }
+
+  return cross_correlation_matrix ;
 }
