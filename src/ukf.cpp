@@ -1,7 +1,7 @@
 #include "ukf.h"
 #include "Eigen/Dense"
 #include <iostream>
-#include "Tools.h"
+#include "tools.h"
 
 using namespace std;
 using Eigen::MatrixXd;
@@ -25,14 +25,14 @@ UKF::UKF() {
   P_ = MatrixXd(5, 5);
 
   // Process noise standard deviation longitudinal acceleration in m/s^2
-  // Assumed your typical bike will be accelarating at most from stop to 30km/h in 10sec, which gives
-  // about 8m/s^2 acceleration. Taking half of it for one std gives 4 m/s^2
-  std_a_ = 4;
+  // Assumed your typical bike will be accelarating at most from stop to 30 km/h in 5 sec, which gives
+  // about 4 m/s^2 acceleration. Taking half of it for one std gives 2 m/s^2
+  std_a_ = 2;
 
   // Process noise standard deviation yaw acceleration in rad/s^2
-  // Assumed a typical biker would be doing a 90deg turn in 2 sec, which gives PI/4 rad/s^2 acceleration.
-  // Taking half of it for one std gives PI/8 rad/s^2
-  std_yawdd_ = M_PI / 8.0;
+  // Assumed a typical biker would be doing avery fast 90 deg turn in 1 sec, which gives PI/2 rad/s^2 acceleration.
+  // Taking half of it for one std gives PI/4 rad/s^2
+  std_yawdd_ = M_PI / 4.0;
 
   // Laser measurement noise standard deviation position1 in m
   std_laspx_ = 0.15;
